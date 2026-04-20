@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ESP32 Skin Patch Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --card:#121a2b;
+      --muted:#9aa7bd;
+      --ok:#22c55e;
+      --warn:#facc15;
+      --bad:#ef4444;
+      --blue:#3b82f6;
+      --line:rgba(255,255,255,.08);
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family:system-ui,Segoe UI,Arial,sans-serif;
+      background:var(--bg);
+      color:#eaf0ff;
+    }
+    header{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+      padding:16px 18px;
+      background:#070c16;
+      border-bottom:1px solid var(--line);
+      flex-wrap:wrap;
+    }
+    h1{ margin:0; font-size:18px; font-weight:800; }
+    .btn{
+      border:0;
+      padding:10px 14px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:800;
+      background:linear-gradient(135deg,var(--blue),#1d4ed8);
+      color:white;
+    }
+    .smallBtn{
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.06);
+      color:#eaf0ff;
+      cursor:pointer;
+      font-weight:700;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .status{ font-size:13px; color:var(--muted); margin-top:4px; }
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+      gap:16px;
+      padding:16px;
+    }
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:14px;
+      box-shadow:0 10px 25px rgba(0,0,0,.35);
+    }
+    .title{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:8px;
+      gap:10px;
+    }
+    .title span{ color:var(--muted); font-size:13px; }
+    .value{ font-size:42px; font-weight:900; letter-spacing:-1px; }
+    .sub{
+      color:var(--muted);
+      font-size:13px;
+      margin-top:4px;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 10px;
+      border-radius:999px;
+      background:rgba(255,255,255,.06);
+      border:1px solid var(--line);
+      font-size:13px;
+    }
+    .dot{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+    .ok{ background:var(--ok); }
+    .warn{ background:var(--warn); }
+    .bad{ background:var(--bad); }
+    .canvasWrap{ height:220px; margin-top:10px; }
+    pre{
+      margin:0;
+      white-space:pre-wrap;
+      word-break:break-word;
+      background:#070c16;
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:12px;
+      color:#cfe0ff;
+      max-height:220px;
+      overflow:auto;
+      font-size:12px;
+    }
+    .note{ color:var(--muted); font-size:12px; line-height:1.5; }
+    .chatBox{
+      height:240px; overflow:auto; background:#070c16; border:1px solid var(--line);
+      border-radius:14px; padding:10px; font-size:13px;
+    }
+    .chatLine{ margin:8px 0; line-height:1.5; }
+    .chatLine b{ color:#dbe7ff; }
+    .chatRow{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+    .chatInput{
+      flex:1; min-width:220px; padding:10px 12px; border-radius:12px;
+      border:1px solid var(--line); background:#050914; color:#eaf0ff; outline:none;
+    }
+    .kbd{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; opacity:.9; }
+    .imgRow{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start; }
+    .imgPreview{
+      width:280px; max-width:100%; border:1px solid var(--line);
+      border-radius:14px; overflow:hidden; background:#050914;
+    }
+    .imgPreview img{
+      width:100%; display:block; min-height:180px; object-fit:cover; background:#050914;
+    }
+    .imgControls{ flex:1; min-width:260px; }
+    .metricGrid{
+      display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin-top:10px;
+    }
+    .metric{
+      border:1px solid var(--line); border-radius:14px; padding:10px; background:#070c16;
+    }
+    .metric .mLabel{ color:var(--muted); font-size:12px; }
+    .metric .mVal{ font-size:22px; font-weight:900; margin-top:4px; }
+    .bigResult{
+      margin-top:10px; border:1px solid var(--line); border-radius:14px; padding:10px; background:#070c16;
+    }
+    .bigResult .rTitle{ font-weight:900; font-size:14px; }
+    .bigResult .rSub{ color:var(--muted); font-size:12px; margin-top:6px; line-height:1.5; }
+    .cameraFrame{
+      width:100%; min-height:260px; border-radius:14px; overflow:hidden; border:1px solid var(--line);
+      background:#050914; display:flex; align-items:center; justify-content:center;
+    }
+    .cameraFrame img{ width:100%; display:block; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Skin Patch Dashboard</h1>
+    <div class="status" id="status">Status: Not connected</div>
+  </div>
+
+  <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+    <input id="ipInput" class="chatInput" style="max-width:180px;" placeholder="ESP32 IP" value="192.168.169.12" />
+    <button class="btn" id="btnApplyIP">Apply IP</button>
+    <button class="smallBtn" id="btnConnect">Connect ESP32 (Serial)</button>
+    <button class="smallBtn" id="btnFetchWifi">Fetch Sensor Data (Wi-Fi)</button>
+    <a class="smallBtn" id="openMobile" target="_blank" rel="noopener">Open on Mobile</a>
+  </div>
+</header>
+
+<div class="grid">
+  <div class="card">
+    <div class="title">
+      <strong>🌡️ Temperature</strong>
+      <span id="tTime">--</span>
+    </div>
+    <div class="value">
+      <span id="temp">--</span><span style="font-size:20px; color:var(--muted)"> °C</span>
+    </div>
+    <div class="sub">
+      <div class="pill" id="tPill"><span class="dot ok"></span><span id="tLabel">Waiting</span></div>
+      <div class="pill">Interpretation: <span id="tExplain">--</span></div>
+    </div>
+    <div class="canvasWrap"><canvas id="tempChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="title">
+      <strong>🧪 Skin pH</strong>
+      <span id="pTime">--</span>
+    </div>
+    <div class="value">
+      <span id="phV">--</span><span style="font-size:20px; color:var(--muted)"> V</span>
+    </div>
+    <div class="sub">
+      <div class="pill" id="pPill"><span class="dot ok"></span><span id="pLabel">Waiting</span></div>
+      <div class="pill">Raw: <span id="phRaw">--</span></div>
+      <div class="pill">Interpretation: <span id="pExplain">--</span></div>
+      <div class="pill">pH Value: <span id="phVal">--</span></div>
+    </div>
+    <div class="canvasWrap"><canvas id="phChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="title">
+      <strong>📷 ESP32-CAM</strong>
+      <span id="camStatus">Waiting</span>
+    </div>
+
+    <div class="cameraFrame">
+      <img id="camStream" src="" alt="ESP32 Camera">
+    </div>
+
+    <div class="sub">
+      <div class="pill">Camera IP: <span id="camIP">--</span></div>
+      <div class="pill">Stream: <span id="camPath">--</span></div>
+      <div class="pill">Data API: <span id="dataPath">--</span></div>
+    </div>
+
+    <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
+      <button class="smallBtn" id="btnRefreshStream">Refresh Camera</button>
+      <button class="smallBtn" id="btnCaptureCam">Capture Live Camera Image</button>
+      <button class="smallBtn" id="btnCaptureAgain">Capture Again</button>
+      <button class="btn" id="btnCaptureAndClassify">Capture + Classify</button>
+    </div>
+  </div>
+
+  <div class="card" style="grid-column:1 / -1;">
+    <div class="title">
+      <strong>📷 Image Capture + Acne Severity Prediction</strong>
+      <span class="kbd">Auto upload → analyze → optional AI</span>
+    </div>
+
+    <div class="imgRow">
+      <div class="imgPreview">
+        <img id="imgOut" alt="preview" src="" />
+      </div>
+
+      <div class="imgControls">
+        <div class="sub">
+          <div class="pill">Step 1: upload/capture</div>
+          <div class="pill">Step 2: local metrics + backend AI</div>
+        </div>
+
+        <input id="imgInput" type="file" accept="image/*" capture="environment" class="chatInput" />
+
+        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+          <button class="smallBtn" id="btnAnalyzeLocal">Analyze Locally</button>
+          <button class="btn" id="btnAnalyzeAI">Predict Acne Severity (AI)</button>
+        </div>
+
+        <div class="metricGrid">
+          <div class="metric">
+            <div class="mLabel">Redness %</div>
+            <div class="mVal"><span id="mRed">--</span></div>
+          </div>
+          <div class="metric">
+            <div class="mLabel">Flakiness %</div>
+            <div class="mVal"><span id="mFlake">--</span></div>
+          </div>
+          <div class="metric">
+            <div class="mLabel">Bump Count</div>
+            <div class="mVal"><span id="mBumps">--</span></div>
+          </div>
+          <div class="metric">
+            <div class="mLabel">AI Status</div>
+            <div class="mVal" style="font-size:16px;"><span id="mImgStatus">Waiting</span></div>
+          </div>
+        </div>
+
+        <div class="bigResult" style="margin-top:12px;">
+          <div class="rTitle">Live sensors used in explanation</div>
+          <div class="rSub">
+            Temp: <b><span id="liveTempMini">--</span> °C</b> &nbsp; | &nbsp;
+            pH Voltage: <b><span id="livePhMini">--</span> V</b> &nbsp; | &nbsp;
+            Raw ADC: <b><span id="liveRawMini">--</span></b> &nbsp; | &nbsp;
+          </div>
+        </div>
+
+        <div class="bigResult" id="mlBox" style="display:none;">
+          <div class="rTitle" id="mlTitle">Result</div>
+          <div class="rSub" id="mlExplain">--</div>
+          <div class="rSub">Probabilities: <span id="mlProbs">--</span></div>
+        </div>
+
+        <div style="height:10px;"></div>
+        <div class="note">
+          ESP32 endpoints used:
+          <span class="kbd">/stream</span>,
+          <span class="kbd">/capture</span>,
+          <span class="kbd">/data</span>,
+          <span class="kbd">/health</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="title">
+      <strong>📄 Live Serial Lines</strong>
+      <span>latest on top</span>
+    </div>
+    <pre id="log">Waiting for serial data...</pre>
+  </div>
+
+  <div class="card" style="grid-column:1 / -1;">
+    <div class="title">
+      <strong>🤖 Skin AI Assistant</strong>
+      <span class="kbd">Uses live Temp + pH + Image metrics</span>
+    </div>
+
+    <div class="chatBox" id="chatBox">
+      <div class="chatLine"><b>AI:</b> Ask things like “Why is redness high?”</div>
+    </div>
+
+    <div class="chatRow">
+      <input class="chatInput" id="userInput" placeholder="Ask: why is my pH low?" />
+      <button class="btn" id="askBtn">Ask</button>
+      <button class="smallBtn" id="summaryBtn">Explain Current</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let CAMERA_IP = document.getElementById("ipInput").value.trim() || "192.168.169.12";
+let wifiPolling = null;
+let snapshotInterval = null;
+
+let port, reader;
+let buffer = "";
+
+const MAX_POINTS = 60;
+const tempArr = [];
+const phArr = [];
+const labels = [];
+
+const statusEl = document.getElementById("status");
+const logEl = document.getElementById("log");
+
+let lastTempC = null;
+let lastPhV = null;
+let lastPhRaw = null;
+let lastPhValue = null;
+
+let imgMetrics = { rednessPct:null, flakePct:null, bumps:null };
+let selectedFile = null;
+
+function nowTime(){
+  return new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+}
+function setStatus(txt){ statusEl.textContent = "Status: " + txt; }
+function addLog(line){ logEl.textContent = (line + "\n" + logEl.textContent).slice(0, 7000); }
+function movingAvg(arr, n=5){
+  if(arr.length === 0) return null;
+  if(arr.length < n) return arr[arr.length - 1];
+  let s = 0;
+  for(let i = arr.length - n; i < arr.length; i++) s += arr[i];
+  return s / n;
+}
+function normalizeJsonLine(line){
+  let s = line.trim();
+  if(!s) return null;
+  if (s.endsWith("}") && !s.startsWith("{")) s = "{" + s;
+  if (s.startsWith("{") && !s.endsWith("}")) return null;
+  return s;
+}
+function setPill(pillId, labelId, state, text){
+  const pill = document.getElementById(pillId);
+  pill.innerHTML = `<span class="dot ${state}"></span><span id="${labelId}">${text}</span>`;
+}
+function pushPoint(arr, val){
+  arr.push(val);
+  if(arr.length > MAX_POINTS) arr.shift();
+}
+function pushLabel(){
+  labels.push(nowTime());
+  if(labels.length > MAX_POINTS) labels.shift();
+}
+function waitForImageLoad(img){
+  return new Promise((resolve, reject) => {
+    if (img.complete && img.naturalWidth > 0) return resolve();
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error("Image load failed"));
+  });
+}
+function setImgStatus(txt){ document.getElementById("mImgStatus").textContent = txt; }
+function setMetric(id, val){ const el = document.getElementById(id); if (el) el.textContent = val; }
+function showMlBox(title, explain, probs){
+  const box = document.getElementById("mlBox");
+  box.style.display = "block";
+  document.getElementById("mlTitle").textContent = title;
+  document.getElementById("mlExplain").textContent = explain || "--";
+  document.getElementById("mlProbs").textContent = probs || "--";
+}
+function escapeHtml(str){
+  return String(str)
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+function addChat(role, text){
+  const box = document.getElementById("chatBox");
+  box.innerHTML += `<div class="chatLine"><b>${escapeHtml(role)}:</b> ${escapeHtml(text).replaceAll("\n","<br>")}</div>`;
+  box.scrollTop = box.scrollHeight;
+}
+async function apiJson(url, options = {}){
+  const resp = await fetch(url, options);
+  const text = await resp.text();
+  let data = {};
+  try { data = text ? JSON.parse(text) : {}; } catch(e){}
+  if(!resp.ok) {
+    throw new Error(data.error || text || `HTTP ${resp.status}`);
+  }
+  return data;
+}
+
+const tempChart = new Chart(document.getElementById("tempChart"), {
+  type:"line",
+  data:{ labels:[], datasets:[{ data:[], tension:0.35, pointRadius:2, borderWidth:3, borderColor:"#ef4444" }]},
+  options:{
+    responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } },
+    scales:{
+      x:{ ticks:{ color:"#9aa7bd", maxTicksLimit:6 }, grid:{ color:"rgba(255,255,255,.08)" } },
+      y:{ ticks:{ color:"#9aa7bd" }, grid:{ color:"rgba(255,255,255,.08)" } }
+    }
+  }
+});
+
+const phChart = new Chart(document.getElementById("phChart"), {
+  type:"line",
+  data:{ labels:[], datasets:[{ data:[], tension:0.35, pointRadius:2, borderWidth:3, borderColor:"#3b82f6" }]},
+  options:{
+    responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } },
+    scales:{
+      x:{ ticks:{ color:"#9aa7bd", maxTicksLimit:6 }, grid:{ color:"rgba(255,255,255,.08)" } },
+      y:{ ticks:{ color:"#9aa7bd" }, grid:{ color:"rgba(255,255,255,.08)" } }
+    }
+  }
+});
+
+function updateCharts(){
+  tempChart.data.labels = [...labels];
+  tempChart.data.datasets[0].data = [...tempArr];
+  tempChart.update();
+
+  phChart.data.labels = [...labels];
+  phChart.data.datasets[0].data = [...phArr];
+  phChart.update();
+}
+
+function interpretTemp(t){
+  if (t < 32.0) return { state:"bad", label:"Low", explain:"Low surface temp" };
+  if (t < 35.0) return { state:"ok", label:"Normal", explain:"Typical surface skin temperature" };
+  if (t < 37.5) return { state:"warn", label:"Elevated", explain:"Inflammation risk possible" };
+  return { state:"bad", label:"Very High", explain:"Possible strong inflammation" };
+}
+
+function interpretPhVoltage(v){
+  if (v > 3.0) return { state:"bad", label:"Too Acidic", explain:"Possible irritation" };
+  if (v > 2.6) return { state:"ok", label:"Perfect", explain:"Healthy skin range" };
+  if (v > 2.3) return { state:"warn", label:"Mild Risk", explain:"Slight imbalance" };
+  if (v > 2.0) return { state:"warn", label:"Acne Prone Risk", explain:"Acne-prone tendency" };
+  if (v > 1.7) return { state:"warn", label:"Infection Risk", explain:"Bacterial growth risk" };
+  return { state:"bad", label:"High Acne Risk", explain:"Highly alkaline risk" };
+}
+
+function updateMiniSensors(){
+  document.getElementById("liveTempMini").textContent = (typeof lastTempC === "number") ? lastTempC.toFixed(2) : "--";
+  document.getElementById("livePhMini").textContent = (typeof lastPhV === "number") ? lastPhV.toFixed(3) : "--";
+  document.getElementById("liveRawMini").textContent = (typeof lastPhRaw === "number") ? String(lastPhRaw) : "--";
+  document.getElementById("livePhValueMini").textContent = (typeof lastPhValue === "number") ? lastPhValue.toFixed(2) : "--";
+}
+
+function updateUI(obj){
+  let hasNewPoint = false;
+
+  if (typeof obj.tempC === "number" && !Number.isNaN(obj.tempC)) {
+    lastTempC = obj.tempC;
+    pushPoint(tempArr, obj.tempC);
+    hasNewPoint = true;
+
+    const tSmooth = movingAvg(tempArr) ?? obj.tempC;
+    document.getElementById("temp").textContent = tSmooth.toFixed(2);
+    document.getElementById("tTime").textContent = nowTime();
+
+    const ti = interpretTemp(tSmooth);
+    setPill("tPill", "tLabel", ti.state, ti.label);
+    document.getElementById("tExplain").textContent = ti.explain;
+  }
+
+  if (typeof obj.phVoltage === "number" && !Number.isNaN(obj.phVoltage)) {
+    lastPhV = obj.phVoltage;
+    pushPoint(phArr, obj.phVoltage);
+    hasNewPoint = true;
+
+    const vSmooth = movingAvg(phArr) ?? obj.phVoltage;
+    document.getElementById("phV").textContent = vSmooth.toFixed(3);
+    document.getElementById("pTime").textContent = nowTime();
+
+    const pi = interpretPhVoltage(vSmooth);
+    setPill("pPill", "pLabel", pi.state, pi.label);
+    document.getElementById("pExplain").textContent = pi.explain;
+  }
+
+  if (typeof obj.phRaw === "number" && !Number.isNaN(obj.phRaw)) {
+    lastPhRaw = obj.phRaw;
+    document.getElementById("phRaw").textContent = obj.phRaw;
+  }
+
+  if (typeof obj.phValue === "number" && !Number.isNaN(obj.phValue)) {
+    lastPhValue = obj.phValue;
+    document.getElementById("phVal").textContent = obj.phValue.toFixed(2);
+  }
+
+  if (hasNewPoint) pushLabel();
+  updateMiniSensors();
+  updateCharts();
+}
+
+function parseSerialTextLine(line){
+  const obj = {};
+  const tempMatch = line.match(/temp(?:erature)?\s*[:=]\s*([0-9.]+)/i) || line.match(/tempC\s*[:=]\s*([0-9.]+)/i);
+  const phVoltMatch = line.match(/ph\s*voltage\s*[:=]\s*([0-9.]+)/i) || line.match(/voltage\s*[:=]\s*([0-9.]+)/i);
+  const rawMatch = line.match(/raw\s*[:=]\s*([0-9]+)/i) || line.match(/adc\s*[:=]\s*([0-9]+)/i);
+  const phValueMatch = line.match(/ph\s*value\s*[:=]\s*([0-9.]+)/i) || line.match(/\bph\b\s*[:=]\s*([0-9.]+)/i);
+
+  if (tempMatch) obj.tempC = parseFloat(tempMatch[1]);
+  if (phVoltMatch) obj.phVoltage = parseFloat(phVoltMatch[1]);
+  if (rawMatch) obj.phRaw = parseInt(rawMatch[1], 10);
+  if (phValueMatch) obj.phValue = parseFloat(phValueMatch[1]);
+
+  if (
+    typeof obj.tempC === "number" ||
+    typeof obj.phVoltage === "number" ||
+    typeof obj.phRaw === "number" ||
+    typeof obj.phValue === "number"
+  ) return obj;
+
+  return null;
+}
+
+function stopSnapshotMode() {
+  if (snapshotInterval) {
+    clearInterval(snapshotInterval);
+    snapshotInterval = null;
+  }
+}
+
+function getStreamUrl() {
+  return `http://${CAMERA_IP}/stream`;
+}
+
+function getCaptureUrl() {
+  return `http://${CAMERA_IP}/capture?t=${Date.now()}`;
+}
+
+function startSnapshotMode() {
+  stopSnapshotMode();
+  const camImg = document.getElementById("camStream");
+  const camStatus = document.getElementById("camStatus");
+  const camPath = document.getElementById("camPath");
+
+  camStatus.textContent = "Snapshot mode";
+  camPath.textContent = `http://${CAMERA_IP}/capture`;
+  setStatus("Camera connected in snapshot mode");
+
+  const loadSnapshot = () => {
+    camImg.src = `http://${CAMERA_IP}/capture?t=${Date.now()}`;
+  };
+
+  loadSnapshot();
+  snapshotInterval = setInterval(loadSnapshot, 1500);
+}
+
+async function initCameraStream(){
+  stopSnapshotMode();
+
+  const camImg = document.getElementById("camStream");
+  const camStatus = document.getElementById("camStatus");
+
+  document.getElementById("camIP").textContent = CAMERA_IP;
+  document.getElementById("camPath").textContent = `http://${CAMERA_IP}/stream`;
+  document.getElementById("dataPath").textContent = "/api/esp32/data";
+
+  camImg.onload = null;
+  camImg.onerror = null;
+
+  try{
+    camStatus.textContent = "Checking camera...";
+    setStatus("Checking ESP32...");
+    const health = await apiJson(`/api/esp32/health?ip=${encodeURIComponent(CAMERA_IP)}&t=${Date.now()}`);
+    addLog("Health OK: " + JSON.stringify(health));
+  }catch(err){
+    addLog("Health warning: " + err.message);
+  }
+
+  let done = false;
+
+  const fallbackTimer = setTimeout(() => {
+    if(done) return;
+    done = true;
+    camStatus.textContent = "Stream slow, using snapshot mode";
+    setStatus("Direct stream slow, using capture mode");
+    startSnapshotMode();
+  }, 6000);
+
+  camImg.onload = () => {
+    if(done) return;
+    done = true;
+    clearTimeout(fallbackTimer);
+    camStatus.textContent = "Live stream";
+    setStatus("Camera connected");
+  };
+
+  camImg.onerror = () => {
+    if(done) return;
+    done = true;
+    clearTimeout(fallbackTimer);
+    camStatus.textContent = "Direct stream failed, using snapshot mode";
+    setStatus("Direct stream failed, using capture mode");
+    startSnapshotMode();
+  };
+
+  camStatus.textContent = "Connecting direct stream...";
+  camImg.src = "";
+  setTimeout(() => {
+    camImg.src = getStreamUrl();
+  }, 150);
+}
+
+function refreshCameraStream(){
+  const camImg = document.getElementById("camStream");
+  camImg.src = "";
+  setTimeout(() => {
+    initCameraStream();
+  }, 300);
+}
+
+async function captureCameraStill(){
+  const camStatus = document.getElementById("camStatus");
+  const imgOut = document.getElementById("imgOut");
+
+  try{
+    camStatus.textContent = "Capturing...";
+    setImgStatus("Capturing from ESP32-CAM...");
+    setStatus("Capturing image...");
+
+    const resp = await fetch(getCaptureUrl(), {
+      method: "GET",
+      cache: "no-store",
+      mode: "cors"
+    });
+
+    if(!resp.ok){
+      throw new Error(`Capture failed with status ${resp.status}`);
+    }
+
+    const blob = await resp.blob();
+
+    if(!blob || blob.size === 0){
+      throw new Error("Empty image received");
+    }
+
+    const contentType = blob.type || "image/jpeg";
+    selectedFile = new File([blob], "esp32cam_capture.jpg", { type: contentType });
+
+    const url = URL.createObjectURL(blob);
+    imgOut.src = url;
+    await waitForImageLoad(imgOut);
+
+    camStatus.textContent = "Captured";
+    setImgStatus("Camera image captured ✔");
+    setStatus("Capture successful");
+    addLog("Capture successful from direct ESP32 /capture");
+    return true;
+
+  }catch(err){
+    console.error(err);
+    camStatus.textContent = "Capture failed";
+    setImgStatus("Camera capture failed");
+    setStatus("Capture failed");
+    addLog("Capture failed: " + err.message);
+    alert("Camera capture failed. " + err.message);
+    return false;
+  }
+}
+
+async function captureAgain(){
+  document.getElementById("imgOut").src = "";
+  selectedFile = null;
+  imgMetrics = { rednessPct:null, flakePct:null, bumps:null };
+  setMetric("mRed", "--");
+  setMetric("mFlake", "--");
+  setMetric("mBumps", "--");
+  document.getElementById("mlBox").style.display = "none";
+  setImgStatus("Capturing new image...");
+  await captureCameraStill();
+}
+
+async function captureAndClassify(){
+  const ok = await captureCameraStill();
+  if(!ok) return;
+  await analyzeLocalFromImgElement(document.getElementById("imgOut"));
+  await analyzeAI();
+}
+
+async function connectSerial(){
+  if (!("serial" in navigator)) {
+    alert("Web Serial not supported. Use Chrome or Edge on laptop.");
+    return;
+  }
+
+  try{
+    setStatus("Requesting port...");
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+
+    setStatus("Connected. Reading serial...");
+    addLog("Serial connected successfully.");
+
+    const decoder = new TextDecoderStream();
+    port.readable.pipeTo(decoder.writable);
+    reader = decoder.readable.getReader();
+
+    while(true){
+      const { value, done } = await reader.read();
+      if(done) break;
+      if(!value) continue;
+
+      buffer += value;
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
+
+      for (const rawLine of lines){
+        const line = rawLine.trim();
+        if(!line) continue;
+
+        addLog(line);
+
+        const fixed = normalizeJsonLine(line);
+        if(fixed){
+          try{
+            const obj = JSON.parse(fixed);
+            updateUI(obj);
+            continue;
+          }catch(e){}
+        }
+
+        const parsed = parseSerialTextLine(line);
+        if(parsed) updateUI(parsed);
+      }
+    }
+
+    setStatus("Serial disconnected");
+  }catch(err){
+    console.error(err);
+    setStatus("Failed / disconnected");
+    addLog("Serial connection failed: " + err.message);
+  }
+}
+
+async function fetchSensorDataOnce(){
+  try{
+    const obj = await apiJson(`/api/esp32/data?ip=${encodeURIComponent(CAMERA_IP)}&t=${Date.now()}`);
+    updateUI(obj);
+    addLog(JSON.stringify(obj));
+    setStatus("Connected by Wi-Fi /data");
+  }catch(err){
+    console.error(err);
+    setStatus("Wi-Fi fetch failed");
+    addLog("Wi-Fi fetch failed: " + err.message);
+  }
+}
+
+function startWifiPolling(){
+  if(wifiPolling) clearInterval(wifiPolling);
+  fetchSensorDataOnce();
+  wifiPolling = setInterval(fetchSensorDataOnce, 1500);
+}
+
+async function analyzeLocalFromImgElement(imgEl){
+  setImgStatus("Analyzing locally...");
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d", { willReadFrequently:true });
+
+  const maxW = 420;
+  const scale = Math.min(1, maxW / imgEl.naturalWidth);
+  canvas.width = Math.max(1, Math.floor(imgEl.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.floor(imgEl.naturalHeight * scale));
+
+  ctx.drawImage(imgEl, 0, 0, canvas.width, canvas.height);
+  const im = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = im.data;
+
+  let total = 0;
+  let redCount = 0;
+  let flakeCount = 0;
+
+  const w = canvas.width, h = canvas.height;
+  const mask = new Uint8Array(w * h);
+
+  for(let i = 0, p = 0; i < d.length; i += 4, p++){
+    const r = d[i], g = d[i+1], b = d[i+2];
+    const bright = (r + g + b) / 3;
+    if(bright < 25) continue;
+
+    total++;
+
+    const isRed = (r > 90 && (r - g) > 25 && (r - b) > 25);
+    if(isRed){ redCount++; mask[p] = 1; }
+
+    const maxc = Math.max(r,g,b), minc = Math.min(r,g,b);
+    const sat = maxc - minc;
+    const isFlake = (bright > 170 && sat < 25);
+    if(isFlake) flakeCount++;
+  }
+
+  const rednessPct = total ? (redCount / total) * 100 : 0;
+  const flakePct = total ? (flakeCount / total) * 100 : 0;
+  const bumps = countBlobs(mask, w, h);
+
+  setMetric("mRed", rednessPct.toFixed(0));
+  setMetric("mFlake", flakePct.toFixed(0));
+  setMetric("mBumps", bumps);
+
+  imgMetrics = { rednessPct, flakePct, bumps };
+  setImgStatus("Local done ✔");
+}
+
+function countBlobs(mask, w, h){
+  const visited = new Uint8Array(w * h);
+  let blobs = 0;
+
+  const neighbors = (idx) => {
+    const x = idx % w;
+    const y = (idx / w) | 0;
+    const out = [];
+    for(let dy=-1; dy<=1; dy++){
+      for(let dx=-1; dx<=1; dx++){
+        if(dx === 0 && dy === 0) continue;
+        const nx = x + dx, ny = y + dy;
+        if(nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        out.push(ny * w + nx);
+      }
+    }
+    return out;
+  };
+
+  for(let i = 0; i < w*h; i++){
+    if(mask[i] === 0 || visited[i]) continue;
+    blobs++;
+    let q = [i];
+    visited[i] = 1;
+    let size = 0;
+
+    while(q.length){
+      const cur = q.pop();
+      size++;
+      for(const nb of neighbors(cur)){
+        if(mask[nb] && !visited[nb]){
+          visited[nb] = 1;
+          q.push(nb);
+        }
+      }
+    }
+
+    if(size < 30) blobs--;
+  }
+
+  return Math.max(0, blobs);
+}
+
+async function analyzeAI(){
+  if(!selectedFile){
+    alert("Choose image first.");
+    return;
+  }
+
+  setImgStatus("AI predicting...");
+
+  const fd = new FormData();
+  fd.append("image", selectedFile);
+
+  try{
+    const resp = await fetch(`/api/analyze-image`, {
+      method:"POST",
+      body: fd
+    });
+
+    const text = await resp.text();
+    if(!text.trim()) throw new Error("Empty response from /api/analyze-image");
+
+    const data = JSON.parse(text);
+    if(!resp.ok) throw new Error(data.error || "AI prediction failed");
+
+    const conf = typeof data.confidence === "number" ? data.confidence : null;
+    const confPct = conf !== null ? Math.round(conf * 100) : null;
+    const label = data.pred_label ?? ("Class " + (data.pred_idx ?? "?"));
+
+    let title = `Acne Severity: ${label}`;
+    if(confPct !== null) title += ` (${confPct}% conf)`;
+
+    const explain = data.explain ? data.explain : "Model prediction generated.";
+    const probs = Array.isArray(data.probs) ? data.probs.map(x => Number(x).toFixed(3)).join(", ") : "--";
+
+    showMlBox(title, explain, probs);
+    setImgStatus("AI done ✔");
+  }catch(e){
+    console.error(e);
+    setImgStatus("AI failed");
+    alert("Backend AI not running: " + e.message);
+  }
+}
+
+function localExplain(q){
+  const parts = [];
+  parts.push("Rule-based XAI explanation:");
+
+  if (lastTempC === null && lastPhV === null && imgMetrics.rednessPct === null) {
+    parts.push("No live data yet.");
+    return parts.join("\n");
+  }
+
+  if (typeof lastTempC === "number") {
+    const ti = interpretTemp(lastTempC);
+    parts.push(`• Temp = ${lastTempC.toFixed(2)} °C → ${ti.label} → ${ti.explain}`);
+  }
+  if (typeof lastPhV === "number") {
+    const pi = interpretPhVoltage(lastPhV);
+    parts.push(`• pH Voltage = ${lastPhV.toFixed(3)} V → ${pi.label} → ${pi.explain}`);
+  }
+  if (typeof lastPhRaw === "number") parts.push(`• ADC Raw = ${lastPhRaw}`);
+  if (typeof lastPhValue === "number") parts.push(`• Computed pH = ${lastPhValue.toFixed(2)}`);
+  if (typeof imgMetrics.rednessPct === "number") parts.push(`• Redness ≈ ${imgMetrics.rednessPct.toFixed(0)}%`);
+  if (typeof imgMetrics.flakePct === "number") parts.push(`• Flakiness ≈ ${imgMetrics.flakePct.toFixed(0)}%`);
+  if (typeof imgMetrics.bumps === "number") parts.push(`• Bump Count ≈ ${imgMetrics.bumps}`);
+
+  if(q && q.trim()){
+    parts.push("");
+    parts.push("Your question: " + q.trim());
+  }
+  return parts.join("\n");
+}
+
+async function askBackendAI(question){
+  const payload = {
+    question,
+    live: {
+      tempC: lastTempC,
+      phVoltage: lastPhV,
+      phRaw: lastPhRaw,
+      phValue: lastPhValue,
+      image: imgMetrics
+    }
+  };
+
+  const resp = await fetch("/api/chat", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  const text = await resp.text();
+  if(!text.trim()) throw new Error("Empty response from /api/chat");
+  const data = JSON.parse(text);
+  if(!resp.ok) throw new Error(data.error || "Chat failed");
+  return data.reply || "No reply received.";
+}
+
+async function sendChat(){
+  const input = document.getElementById("userInput");
+  const q = input.value.trim();
+  if(!q) return;
+
+  addChat("You", q);
+  input.value = "";
+
+  addChat("XAI (Rules)", localExplain(q));
+
+  try{
+    const reply = await askBackendAI(q);
+    addChat("AI", reply);
+  }catch(e){
+    addChat("AI", "Backend AI not running. " + e.message);
+  }
+}
+
+document.getElementById("btnApplyIP").addEventListener("click", async () => {
+  const val = document.getElementById("ipInput").value.trim();
+  if(!val){
+    alert("Enter ESP32 IP first.");
+    return;
+  }
+  CAMERA_IP = val;
+  setStatus("IP updated to " + CAMERA_IP);
+  await initCameraStream();
+});
+
+document.getElementById("btnConnect").addEventListener("click", connectSerial);
+document.getElementById("btnFetchWifi").addEventListener("click", startWifiPolling);
+document.getElementById("btnRefreshStream").addEventListener("click", refreshCameraStream);
+document.getElementById("btnCaptureCam").addEventListener("click", captureCameraStill);
+document.getElementById("btnCaptureAgain").addEventListener("click", captureAgain);
+document.getElementById("btnCaptureAndClassify").addEventListener("click", captureAndClassify);
+
+const imgInput = document.getElementById("imgInput");
+const imgOut = document.getElementById("imgOut");
+
+document.getElementById("btnAnalyzeLocal").addEventListener("click", async () => {
+  if(!imgOut.src){
+    alert("Choose image first.");
+    return;
+  }
+  await analyzeLocalFromImgElement(imgOut);
+});
+
+document.getElementById("btnAnalyzeAI").addEventListener("click", analyzeAI);
+
+imgInput.addEventListener("change", async () => {
+  selectedFile = imgInput.files && imgInput.files[0] ? imgInput.files[0] : null;
+  if(!selectedFile){
+    setImgStatus("Waiting");
+    return;
+  }
+
+  const url = URL.createObjectURL(selectedFile);
+  imgOut.src = url;
+  await waitForImageLoad(imgOut);
+
+  setImgStatus("Selected ✔");
+  await analyzeLocalFromImgElement(imgOut);
+});
+
+document.getElementById("askBtn").addEventListener("click", sendChat);
+document.getElementById("summaryBtn").addEventListener("click", () => addChat("XAI (Rules)", localExplain("Explain current readings")));
+document.getElementById("userInput").addEventListener("keydown", (e) => {
+  if(e.key === "Enter") sendChat();
+});
+
+(function(){
+  document.getElementById("openMobile").href = window.location.href;
+  document.getElementById("openMobile").textContent = "Open on Mobile";
+  updateMiniSensors();
+  updateCharts();
+  initCameraStream();
+})();
+</script>
+</body>
+</html>
